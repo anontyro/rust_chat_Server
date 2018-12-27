@@ -1,0 +1,6 @@
+[package]
+name = "websocket_server"
+version = "0.1.0"
+authors = ["Alexander Wilkinson <alexwilkinson@gmail.com>"]
+
+[dependencies]
