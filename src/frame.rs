@@ -30,6 +30,16 @@ impl OpCode {
     }
 }
 
+pub struct WebSocketFrameHeader {
+    fin: bool,
+    rsv1: bool,
+    rsv2: bool,
+    rsv3: bool,
+    masked: bool,
+    opcode: OpCode,
+    payload_length: u8
+}
+
 pub struct WebSocketFrame {
     header: WebSocketFrameHeader,
     mask: Option<[u8; 4]>,
@@ -85,7 +95,7 @@ impl WebSocketFrame {
         }
     }
 
-    fn apply_mask(mask: [u8; 4], bytes: &mut Vec<u8) {
+    fn apply_mask(mask: [u8; 4], bytes: &mut Vec<u8>) {
         for (idx, c) in bytes.iter_mut().enumerate() {
             *c = *c ^ mask[idx % 4];
         }
