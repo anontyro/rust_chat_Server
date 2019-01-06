@@ -15,7 +15,7 @@ use rustc_serialize::base64::{ToBase64, STANDARD};
 
 #[derive(PartialEq)]
 enum ClientState {
-     AwaitingHandshake,
+    AwaitingHandshake(RefCell<Parser<HttpParser>>),
     HandshakeResponse,
     Connected
 }
@@ -70,7 +70,6 @@ impl ParserHandler for HttpParser {
 struct WebsocketClient {
     socket: TcpStream,
     headers: Rc<RefCell<HashMap<String, String>>>,
-    http_parser: Parser<HttpParser>,
     interest: EventSet,
     state: ClientState
 }
@@ -84,15 +83,14 @@ impl WebsocketClient {
             socket: socket,
             headers: headers.clone(),
             interest: EventSet::readable(),
-            state: ClientState::AwaitingHandshake,
-            http_parser: Parser::request(HttpParser{
+            state: ClientState::AwaitingHandshake(RefCell::new(Parser::request(HttpParser {
                 current_key: None,
                 headers: headers.clone()
-            })
+            }))),
         }
     }
 
-    fn read(&mut self) {
+    fn read_handshake (&mut self) {
         // loop to wait for data to listen to
         loop {
             let mut buf = [0; 2048]; // create a buffer and allocate space to it
@@ -106,10 +104,14 @@ impl WebsocketClient {
                 Ok(None) => break,
                 Ok(Some(len)) => {
                     // providing a slice of the data to the parser
-                    self.http_parser.parse(&buf[0..len]);
+                    let is_upgrade = if let ClientState::AwaitingHandshake(ref parser_state) = self.state {
+                        let mut parser = parser_state.borrow_mut();
+                        parser.parse(&buf);
+                        parser.is_upgrade()
+                    } else { false };
 
                     // check if the connection has the upgrade header
-                    if self.http_parser.is_upgrade() {
+                    if is_upgrade {
                         self.state = ClientState::HandshakeResponse; // update the client state
 
                         // change the client state from read to write
@@ -120,6 +122,15 @@ impl WebsocketClient {
                     }
                 }
             }
+        }
+    }
+
+    fn read (&mut self) {
+        match self.state {
+            ClientState::AwaitingHandshake(_) => {
+                self.read_handshake();
+            },
+            _ => {}
         }
     }
 
